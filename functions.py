@@ -221,9 +221,9 @@ class main():
 
 
 def gen_centerlines(df):
-
-
-    df['centerlines'] = 'a'
+    """
+    """
+    centerlines = []
 
     for i, row in df.iterrows():
         try:
@@ -231,10 +231,10 @@ def gen_centerlines(df):
         except:
             print(i, row)
             cl = Centerline(row.geometry, interpolation_distance=0.2)
-        #if i == 11401:
-        #    print(i)
-        #print(cl)
-        df.at[i, 'centerlines'] = cl
+
+        centerlines.append(cl)
+
+    return centerlines
 
 
 def processing(df, output_dir, output_prefix):
@@ -242,9 +242,7 @@ def processing(df, output_dir, output_prefix):
 
     """
     print('Read in data')
-    #df['centerlines'] = df.geometry.apply(Centerline)
-    df = gen_centerlines(df)
-
+    df['centerlines'] = gen_centerlines(df)
     print('Done centerline method')
     df.centerlines = df.centerlines.apply(linemerge)
     print('Done linemerge')
