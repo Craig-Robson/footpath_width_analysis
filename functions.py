@@ -1,15 +1,8 @@
-import glob
-import json
-import os
-import configparser
-import io
-import zipfile
-
+import time
 import centerline
 import centerline.exceptions
 import pandas as pd
 import geopandas as gpd
-import requests
 import shapely.wkt
 
 
@@ -75,8 +68,6 @@ class ProcessingMethod:
         df_segments = pd.DataFrame(data)
         df_segments = gpd.GeoDataFrame(df_segments, crs=df.crs, geometry='geometry')
         return df_segments
-
-
 
     @staticmethod
     def explode_to_segments_(df):
@@ -148,102 +139,25 @@ def interpolate(line):
         return ProcessingMethod.interpolate_by_distance(line)
 
 
-def read_config():
-    """"""
-    cfg = configparser.ConfigParser()
-    cfg.read('api_config.ini')
-    return {'url': cfg['api']['url'],
-            'username': cfg['api']['username'],
-            'password': cfg['api']['password']}
-
-
-def get_data():
-    """"""
-    api_details = read_config()
-    classification_codes = '10123, 10172, 10183'
-    response = requests.get('%s/data/mastermap/areas?export_format=geojson&scale=oa&area_codes=E00042673&classification_codes=%s' %(api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #response = requests.get('%s/data/mastermap/areas?export_format=geojson&scale=lad&area_codes=E08000021&classification_codes=%s' % (api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #response = requests.get(
-    #    '%s/data/mastermap/areas?export_format=geojson-zip&scale=lad&area_codes=E08000021&classification_codes=%s' % (
-    #    api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #print('Got data')
-    #z = zipfile.ZipFile(io.BytesIO(response.content))
-    #z.extractall('./data.geojson')
-
-    data = json.loads(response.text)
-    print('Number of features:', len(data['features']))
-    with open('./data.geojson', 'w') as data_file:
-        json.dump(data, data_file)
-
-    return
-
-
-def import_file(file_name):
-    """"""
-    df = gpd.read_file(file_name, encoding='UTF-8')
-    return df
-
-
-def create_df(json_data):
-    """"""
-    return gpd.read_geojson(json_data)
-
-
-def get_stats():
-    """"""
-    return
-
-
-##############################################
-
-class main():
-
-    def __init__(self, output_dir, output_prefix):
-        """
-        """
-        self.output_dir = output_dir
-        self.output_prefix = output_prefix
-
-    def from_file(self, filename):
-        """
-
-        """
-        df = gpd.read_file(filename)
-
-        processing(df, self.output_dir, self.output_prefix)
-        return
-
-    def get_data(self):
-        # import geojson (as would come from the API)
-        get_data()
-        processing(df, self.output_dir, self.output_prefix)
-        return
-
-
-def gen_centerlines(df):
+def gen_centerlines(df, interpolation_distance=0.5):
     """
     """
     centerlines = []
 
     for i, row in df.iterrows():
-        try:
-            cl = Centerline(row.geometry, interpolation_distance=0.5)
-        except:
-            print(i, row)
-            cl = Centerline(row.geometry, interpolation_distance=0.2)
-
+        cl = Centerline(row.geometry, interpolation_distance=interpolation_distance)
         centerlines.append(cl)
 
     return centerlines
 
 
-def processing(df, output_dir, output_prefix):
+def process(df):
     """
-
+    Run processing
     """
-    print('Read in data')
+    start = time.process_time()
     df['centerlines'] = gen_centerlines(df)
-    print('Done centerline method')
+    print('Generated centerlines. Took %s' % (time.process_time() - start))
     df.centerlines = df.centerlines.apply(linemerge)
     print('Done linemerge')
     df.centerlines = df.centerlines.apply(ProcessingMethod.remove_short_lines)
@@ -257,6 +171,6 @@ def processing(df, output_dir, output_prefix):
     dfc = df.set_geometry('centerlines')
     df_segments = ProcessingMethod.explode_to_segments(df)
     dfc_segments = ProcessingMethod.explode_to_segments_(dfc)
-    print('Go to save')
-    df_segments.to_file('%s_widths.shp' %output_prefix)
-    dfc_segments.to_file('%s_centrelines.shp' %output_prefix)
+    print('Completed processing. Took %s' % (time.process_time() - start))
+
+    return df_segments, dfc_segments
