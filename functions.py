@@ -12,75 +12,68 @@ from shapely.geometry import Point, MultiPoint, MultiLineString
 from shapely.ops import linemerge, nearest_points
 
 
-class ProcessingMethod:
+def remove_short_lines(line):
 
-    def __init__(self):
-        """"""
+    if line.type == 'MultiLineString':
 
-    @staticmethod
-    def remove_short_lines(line):
+        passing_lines = []
 
-        if line.type == 'MultiLineString':
+        for i, linestring in enumerate(line):
 
-            passing_lines = []
+            other_lines = MultiLineString([x for j, x in enumerate(line) if j != i])
 
-            for i, linestring in enumerate(line):
+            p0 = Point(linestring.coords[0])
+            p1 = Point(linestring.coords[-1])
 
-                other_lines = MultiLineString([x for j, x in enumerate(line) if j != i])
+            is_deadend = False
 
-                p0 = Point(linestring.coords[0])
-                p1 = Point(linestring.coords[-1])
+            if p0.disjoint(other_lines): is_deadend = True
+            if p1.disjoint(other_lines): is_deadend = True
 
-                is_deadend = False
+            if not is_deadend or linestring.length > 5:
+                passing_lines.append(linestring)
 
-                if p0.disjoint(other_lines): is_deadend = True
-                if p1.disjoint(other_lines): is_deadend = True
+        return MultiLineString(passing_lines)
 
-                if not is_deadend or linestring.length > 5:
-                    passing_lines.append(linestring)
+    if line.type == 'LineString':
+        return line
 
-            return MultiLineString(passing_lines)
+    
+def interpolate_by_distance(linestring, distance=1):
+    count = round(linestring.length / distance) + 1
 
-        if line.type == 'LineString':
-            return line
+    if count == 1:
+        # grab mid-point if it's a short line
+        return [linestring.interpolate(linestring.length / 2)]
+    else:
+        # interpolate along the line
+        return [linestring.interpolate(distance * i) for i in range(count)]
 
-    @staticmethod
-    def interpolate_by_distance(linestring, distance=1):
-        count = round(linestring.length / distance) + 1
+def explode_to_segments(df):
+    data = {'geometry': [], 'width': []}
 
-        if count == 1:
-            # grab mid-point if it's a short line
-            return [linestring.interpolate(linestring.length / 2)]
-        else:
-            # interpolate along the line
-            return [linestring.interpolate(distance * i) for i in range(count)]
+    for i, row in df.iterrows():
 
-    @staticmethod
-    def explode_to_segments(df):
-        data = {'geometry': [], 'width': []}
+        for segment, distance in zip(row.segments, row.avg_distances):
+            data['geometry'].append(segment.buffer(distance))
+            data['width'].append(distance * 2)
 
-        for i, row in df.iterrows():
+    df_segments = pd.DataFrame(data)
+    df_segments = gpd.GeoDataFrame(df_segments, crs=df.crs, geometry='geometry')
+    return df_segments
 
-            for segment, distance in zip(row.segments, row.avg_distances):
-                data['geometry'].append(segment.buffer(distance))
-                data['width'].append(distance * 2)
 
-        df_segments = pd.DataFrame(data)
-        df_segments = gpd.GeoDataFrame(df_segments, crs=df.crs, geometry='geometry')
-        return df_segments
+def explode_to_segments_(df):
+    data = {'geometry': [], 'width': []}
 
-    @staticmethod
-    def explode_to_segments_(df):
-        data = {'geometry': [], 'width': []}
+    for i, row in df.iterrows():
+        for segment, distance in zip(row.segments, row.avg_distances):
+            data['geometry'].append(segment)
+            data['width'].append(distance * 2)
 
-        for i, row in df.iterrows():
-            for segment, distance in zip(row.segments, row.avg_distances):
-                data['geometry'].append(segment)
-                data['width'].append(distance * 2)
-
-        df_segments = pd.DataFrame(data)
-        df_segments = gpd.GeoDataFrame(df_segments, crs=df.crs, geometry='geometry')
-        return df_segments
+    df_segments = pd.DataFrame(data)
+    df_segments = gpd.GeoDataFrame(df_segments, crs=df.crs, geometry='geometry')
+    return df_segments
 
 
 def get_segments(line):
@@ -131,12 +124,12 @@ def interpolate(line):
         all_points = []
 
         for linestring in line:
-            all_points.extend(ProcessingMethod.interpolate_by_distance(linestring))
+            all_points.extend(interpolate_by_distance(linestring))
 
         return all_points
 
     if line.type == 'LineString':
-        return ProcessingMethod.interpolate_by_distance(line)
+        return interpolate_by_distance(line)
 
 
 def gen_centerlines(df, interpolation_distance=0.5):
@@ -160,7 +153,7 @@ def process(df):
     print('Generated centerlines. Took %s' % (time.process_time() - start))
     df.centerlines = df.centerlines.apply(linemerge)
     print('Done linemerge')
-    df.centerlines = df.centerlines.apply(ProcessingMethod.remove_short_lines)
+    df.centerlines = df.centerlines.apply(remove_short_lines)
     print('Done remove short lines')
     df.centerlines = df.centerlines.apply(lambda line: line.simplify(1, preserve_topology=True))
     print('Done simplify')
@@ -169,8 +162,8 @@ def process(df):
     df['avg_distances'] = df.apply(get_avg_distances, axis=1)
     print('Done get avg distances')
     dfc = df.set_geometry('centerlines')
-    df_segments = ProcessingMethod.explode_to_segments(df)
-    dfc_segments = ProcessingMethod.explode_to_segments_(dfc)
+    df_segments = explode_to_segments(df)
+    dfc_segments = explode_to_segments_(dfc)
     print('Completed processing. Took %s' % (time.process_time() - start))
 
     return df_segments, dfc_segments
