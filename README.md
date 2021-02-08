@@ -7,7 +7,7 @@ The code contained within for estimating polygon widths has been adapted from an
 
 ## api_config.ini
 A config file is used to store the url for the API and the username and password for the this. It should have the following structure:  
-[API]
-url=www.url
-username=username_for_api
-password=password_for_api
+[API]  
+url=www.url  
+username=username_for_api  
+password=password_for_api  

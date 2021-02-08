@@ -15,7 +15,7 @@ def read_config():
             'password': cfg['API']['password']}
 
 
-def get_data(area_scale='oa', area_code='E00042673', zip=False, file_name = 'data.geojson', output_dir = './'):
+def get_data(area_scale='oa', area_code='E00042673', zip=False, file_name='data.geojson', output_dir='./'):
     """
     Pull data from NISMOD-DB API and save as geojson file.
     """
@@ -66,7 +66,8 @@ def create_df(json_data):
 
 ##############################################
 
+# fetch data and save to file
+data_path = get_data()
 
-df = get_data()
-df_1, df_2 = process(import_file(df))
-
+# run path width calculations
+df_1, df_2 = process(import_file(data_path))
