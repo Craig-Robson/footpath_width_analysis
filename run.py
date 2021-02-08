@@ -1,4 +1,4 @@
-import requests, configparser, json
+import requests, configparser, json, io, zipfile
 import geopandas as gpd
 from os import path
 from functions import process
@@ -15,7 +15,7 @@ def read_config():
             'password': cfg['API']['password']}
 
 
-def get_data(area_scale='oa', area_code='E00042673'):
+def get_data(area_scale='oa', area_code='E00042673', zip=False):
     """
     Pull data from NISMOD-DB API and save as geojson file.
     """
@@ -24,22 +24,25 @@ def get_data(area_scale='oa', area_code='E00042673'):
 
     api_details = read_config()
     classification_codes = '10123, 10172, 10183'
-    response = requests.get('%s/data/mastermap/areas?export_format=geojson&scale=oa&area_codes=E00042673&classification_codes=%s' %(api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #response = requests.get('%s/data/mastermap/areas?export_format=geojson&scale=lad&area_codes=E08000021&classification_codes=%s' % (api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #response = requests.get(
-    #    '%s/data/mastermap/areas?export_format=geojson-zip&scale=lad&area_codes=E08000021&classification_codes=%s' % (
-    #    api_details['url'], classification_codes), auth=(api_details['username'], api_details['password']))
-    #print('Got data')
-    #z = zipfile.ZipFile(io.BytesIO(response.content))
-    #z.extractall('./data.geojson')
+
+    if not zip:
+        response = requests.get('%s/data/mastermap/areas?export_format=geojson&scale=%s&area_codes=%s&classification_codes=%s' %(api_details['url'], area_scale, area_code, classification_codes), auth=(api_details['username'], api_details['password']))
+
+    else:
+        response = requests.get('%s/data/mastermap/areas?export_format=geojson-zip&scale=%s&area_codes=%s&classification_codes=%s' % (api_details['url'], area_scale, area_code, classification_codes), auth=(api_details['username'], api_details['password']))
+
     if response.status_code != 200:
-        print('API returned status code %s, failing in the process.' %response.status_code)
+        print('API returned status code %s, failing in the process. Error: %s' %(response.status_code, response.text))
         exit()
 
-    data = json.loads(response.text)
-    print('Number of features:', len(data['features']))
-    with open(path.join(output_dir, file_name), 'w') as data_file:
-        json.dump(data, data_file)
+    if zip:
+        z = zipfile.ZipFile(io.BytesIO(response.content))
+        z.extractall(path.join(output_dir, file_name))
+    else:
+        data = json.loads(response.text)
+        #print('Number of features:', len(data['features']))
+        with open(path.join(output_dir, file_name), 'w') as data_file:
+            json.dump(data, data_file)
 
     return path.join(output_dir, file_name)
 
