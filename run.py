@@ -15,14 +15,14 @@ def read_config():
             'password': cfg['API']['password']}
 
 
-def get_data(area_scale='oa', area_code='E00042673', zip=False):
+def get_data(area_scale='oa', area_code='E00042673', zip=False, file_name = 'data.geojson', output_dir = './'):
     """
     Pull data from NISMOD-DB API and save as geojson file.
     """
-    file_name = 'data.geojson'
-    output_dir = './'
-
+    # fetch login details for API call
     api_details = read_config()
+
+    # pre-set classification codes for MasterMap polygons
     classification_codes = '10123, 10172, 10183'
 
     if not zip:
@@ -31,6 +31,7 @@ def get_data(area_scale='oa', area_code='E00042673', zip=False):
     else:
         response = requests.get('%s/data/mastermap/areas?export_format=geojson-zip&scale=%s&area_codes=%s&classification_codes=%s' % (api_details['url'], area_scale, area_code, classification_codes), auth=(api_details['username'], api_details['password']))
 
+    # if an error from API return to user
     if response.status_code != 200:
         print('API returned status code %s, failing in the process. Error: %s' %(response.status_code, response.text))
         exit()
@@ -44,6 +45,7 @@ def get_data(area_scale='oa', area_code='E00042673', zip=False):
         with open(path.join(output_dir, file_name), 'w') as data_file:
             json.dump(data, data_file)
 
+    # return file path to saved data
     return path.join(output_dir, file_name)
 
 
@@ -57,7 +59,7 @@ def import_file(file_name):
 
 def create_df(json_data):
     """
-    Convert raw geojson into a geo-datafrane
+    Convert raw geojson into a geo-dataframe
     """
     return gpd.read_geojson(json_data)
 
